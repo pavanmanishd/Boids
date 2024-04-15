@@ -4,6 +4,24 @@
         <link rel="stylesheet" href="style.css">
     </head>
     <body>
+        <div id="controls">
+            <h1>Boids Simulation</h1>
+
+            <label for="boidCount">Boid Count</label>
+            <input type="range" id="boidCount" min="1" max="500" value="100">
+            <label for="speed">Speed</label>
+            <input type="range" id="speed" min="1" max="10" value="4">
+            <label for="force_multiplier">Force Multiplier</label>
+            <input type="range" id="force_multiplier" min="1" max="10" value="1">
+            <label for="separation_distance">Separation Distance</label>
+            <input type="range" id="separation_distance" min="0" max="200" value="100">
+            <label for="alignment_distance">Alignment Distance</label>
+            <input type="range" id="alignment_distance" min="0" max="200" value="100">
+            <label for="cohesion_distance">Cohesion Distance</label>
+            <input type="range" id="cohesion_distance" min="0" max="200" value="100">
+            <button id="change">Change</button>
+            <button id="reset">Reset</button>
+        </div>
         <canvas id="canvas"></canvas>
         <script src="index.js"></script>
     </body>

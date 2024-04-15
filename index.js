@@ -1,12 +1,13 @@
 const CANVAS_WIDTH = window.innerWidth; 
 const CANVAS_HEIGHT = window.innerHeight;
-const NUM_BOIDS = 100;
+var NUM_BOIDS = 100;
 const BOID_RADIUS = 10;
-const SEPARATION_DISTANCE = 100;
-const ALIGNMENT_DISTANCE = 100;
-const COHESION_DISTANCE = 100;
-const MAX_SPEED = 4;
-const FORCE_MULTIPLIER = 0.1;
+var SEPARATION_DISTANCE = 100;
+var ALIGNMENT_DISTANCE = 100;
+var COHESION_DISTANCE = 100;
+var MAX_SPEED = 4;
+var FORCE_MULTIPLIER = 0.1;
+
 
 // Boid class
 class Boid {
@@ -124,6 +125,14 @@ class Boid {
   }
 
   distance(other) {
+    if (
+        this === undefined ||
+        other === undefined ||
+        this.position === undefined ||
+        other.position === undefined
+      ) {
+        return 0;
+      }
     let dx = this.position.x - other.position.x;
     let dy = this.position.y - other.position.y;
     return Math.sqrt(dx * dx + dy * dy);
@@ -185,7 +194,52 @@ const boids = [];
 for (let i = 0; i < NUM_BOIDS; i++) {
   boids.push(new Boid());
 }
-console.log("Canvas width:", canvas.width, "Canvas height:", canvas.height);
 
 // Start the animation loop
 animate();
+
+// input elements
+const boidCountElement = document.getElementById("boidCount");
+const speedElement = document.getElementById("speed");
+const separationElement = document.getElementById("separation_distance");
+const alignmentElement = document.getElementById("alignment_distance");
+const cohesionElement = document.getElementById("cohesion_distance");
+const forceElement = document.getElementById("force_multiplier");
+
+const resetButton = document.getElementById("reset");
+const changeButton = document.getElementById("change");
+// Event listeners
+resetButton.addEventListener("click", () => {
+    NUM_BOIDS = 100;
+    SEPARATION_DISTANCE = 100;
+    ALIGNMENT_DISTANCE = 100;
+    COHESION_DISTANCE = 100;
+    MAX_SPEED = 4;
+    FORCE_MULTIPLIER = 0.1;
+    boidCountElement.value = NUM_BOIDS;
+    separationElement.value = SEPARATION_DISTANCE;
+    alignmentElement.value = ALIGNMENT_DISTANCE;
+    cohesionElement.value = COHESION_DISTANCE;
+    speedElement.value = MAX_SPEED;
+    forceElement.value = FORCE_MULTIPLIER*10;
+
+    boids.length = 0;
+    for (let i = 0; i < NUM_BOIDS; i++) {
+        boids.push(new Boid());
+    }
+});
+
+changeButton.addEventListener("click", () => {
+    NUM_BOIDS = boidCountElement.value;
+    SEPARATION_DISTANCE = separationElement.value;
+    ALIGNMENT_DISTANCE = alignmentElement.value;
+    COHESION_DISTANCE = cohesionElement.value;
+    MAX_SPEED = speedElement.value;
+    FORCE_MULTIPLIER = forceElement.value/10;
+
+    boids.length = 0;
+    for (let i = 0; i < NUM_BOIDS; i++) {
+        boids.push(new Boid());
+    }
+});
+
