@@ -1,245 +1,273 @@
-const CANVAS_WIDTH = window.innerWidth; 
-const CANVAS_HEIGHT = window.innerHeight;
-var NUM_BOIDS = 100;
-const BOID_RADIUS = 10;
-var SEPARATION_DISTANCE = 100;
-var ALIGNMENT_DISTANCE = 100;
-var COHESION_DISTANCE = 100;
-var MAX_SPEED = 4;
-var FORCE_MULTIPLIER = 0.1;
+// Define constants and parameters
+let numBoids = 100;
+let visualRange = 35;
+let protectedRange = 8;
+let centeringFactor = 0.0005;
+let avoidFactor = 0.1;
+let matchingFactor = 0.1;
+let maxSpeed = 6;
+let minSpeed = 3;
+let turnFactor = 0.2;
+let biasIncrement = 0.00004;
+let defaultBiasVal = 0.001;
+let maxBias = 0.1;
+let canvasWidth = window.innerWidth;
+let canvasHeight = window.innerHeight;
 
+// Define canvas and context
+const canvas = document.getElementById('canvas');
+canvas.width = canvasWidth;
+canvas.height = canvasHeight;
+const ctx = canvas.getContext('2d');
 
-// Boid class
+// Define Boid class
 class Boid {
-  constructor() {
-    this.position = {
-      x: Math.random() * CANVAS_WIDTH,
-      y: Math.random() * CANVAS_HEIGHT
-    };
-    this.velocity = {
-      x: Math.random() * 2 - 1,
-      y: Math.random() * 2 - 1
-    };
-  }
-
-  update(boids) {
-    this.separate(boids);
-    this.align(boids);
-    this.cohere(boids);
-    this.updatePosition();
-  }
-
-  separate(boids) {
-    let separationForce = { x: 0, y: 0 };
-    let numNeighbors = 0;
-
-    for (let i = 0; i < boids.length; i++) {
-      let distance = this.distance(boids[i]);
-      if (distance > 0 && distance < SEPARATION_DISTANCE) {
-        let diff = {
-          x: this.position.x - boids[i].position.x,
-          y: this.position.y - boids[i].position.y
-        };
-        let norm = this.normalize(diff);
-        separationForce.x += norm.x;
-        separationForce.y += norm.y;
-        numNeighbors++;
-      }
+    constructor(x, y, vx, vy, biasVal) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.biasVal = biasVal;
+        this.prevPositions = [];
     }
 
-    if (numNeighbors > 0) {
-      separationForce.x /= numNeighbors;
-      separationForce.y /= numNeighbors;
-      separationForce = this.normalize(separationForce);
-      separationForce.x *= FORCE_MULTIPLIER;
-      separationForce.y *= FORCE_MULTIPLIER;
-      this.velocity.x += separationForce.x;
-      this.velocity.y += separationForce.y;
+    update(boids) {
+        let xposAvg = 0, yposAvg = 0, xvelAvg = 0, yvelAvg = 0, neighboringBoids = 0, closeDx = 0, closeDy = 0;
+
+        for (const otherBoid of boids) {
+            const dx = this.x - otherBoid.x;
+            const dy = this.y - otherBoid.y;
+            const squaredDistance = dx * dx + dy * dy;
+
+            if (squaredDistance < visualRange ** 2) {
+                if (squaredDistance < protectedRange ** 2) {
+                    closeDx += this.x - otherBoid.x;
+                    closeDy += this.y - otherBoid.y;
+                } else {
+                    xposAvg += otherBoid.x;
+                    yposAvg += otherBoid.y;
+                    xvelAvg += otherBoid.vx;
+                    yvelAvg += otherBoid.vy;
+                    neighboringBoids++;
+                }
+            }
+
+            
+        }
+
+        if (neighboringBoids > 0) {
+            xposAvg /= neighboringBoids;
+            yposAvg /= neighboringBoids;
+            xvelAvg /= neighboringBoids;
+            yvelAvg /= neighboringBoids;
+
+            this.vx += (xposAvg - this.x) * centeringFactor + (xvelAvg - this.vx) * matchingFactor;
+            this.vy += (yposAvg - this.y) * centeringFactor + (yvelAvg - this.vy) * matchingFactor;
+        }
+
+        this.vx += closeDx * avoidFactor;
+        this.vy += closeDy * avoidFactor;
+
+        if (this.x < 100 || this.x > canvas.width-100) {
+            this.vx = this.x < 100 ? this.vx + turnFactor : this.vx - turnFactor;
+        }
+        if (this.y < 100 || this.y > canvas.height-100) {
+            this.vy = this.y < 100 ? this.vy + turnFactor : this.vy - turnFactor;
+        }
+
+        if (this.biasVal !== undefined) {
+            if (this.vx > 0) {
+                this.biasVal = Math.min(this.biasVal + biasIncrement, maxBias);
+            } else {
+                this.biasVal = Math.max(this.biasVal - biasIncrement, -maxBias);
+            }
+            this.vx = (1 - this.biasVal) * this.vx + this.biasVal * Math.sign(this.biasVal === 1 ? 1 : -1);
+        }
+
+        const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
+        if (speed < minSpeed || speed > maxSpeed) {
+            this.vx = (this.vx / speed) * Math.min(Math.max(speed, minSpeed), maxSpeed);
+            this.vy = (this.vy / speed) * Math.min(Math.max(speed, minSpeed), maxSpeed);
+        }
+        this.prevPositions.push({ x: this.x, y: this.y });
+        let minVal = Math.ceil(1/numBoids * 2500);
+        if (this.prevPositions.length > minVal) { 
+            this.prevPositions.shift();
+        }
+        this.x += this.vx;
+        this.y += this.vy;
     }
-  }
-
-  align(boids) {
-    let alignmentForce = { x: 0, y: 0 };
-    let numNeighbors = 0;
-
-    for (let i = 0; i < boids.length; i++) {
-      let distance = this.distance(boids[i]);
-      if (distance > 0 && distance < ALIGNMENT_DISTANCE) {
-        alignmentForce.x += boids[i].velocity.x;
-        alignmentForce.y += boids[i].velocity.y;
-        numNeighbors++;
-      }
-    }
-
-    if (numNeighbors > 0) {
-      alignmentForce.x /= numNeighbors;
-      alignmentForce.y /= numNeighbors;
-      alignmentForce = this.normalize(alignmentForce);
-      alignmentForce.x *= FORCE_MULTIPLIER;
-      alignmentForce.y *= FORCE_MULTIPLIER;
-      this.velocity.x += alignmentForce.x;
-      this.velocity.y += alignmentForce.y;
-    }
-  }
-
-  cohere(boids) {
-    let cohesionForce = { x: 0, y: 0 };
-    let numNeighbors = 0;
-
-    for (let i = 0; i < boids.length; i++) {
-      let distance = this.distance(boids[i]);
-      if (distance > 0 && distance < COHESION_DISTANCE) {
-        cohesionForce.x += boids[i].position.x;
-        cohesionForce.y += boids[i].position.y;
-        numNeighbors++;
-      }
-    }
-
-    if (numNeighbors > 0) {
-      cohesionForce.x /= numNeighbors;
-      cohesionForce.y /= numNeighbors;
-      cohesionForce.x -= this.position.x;
-      cohesionForce.y -= this.position.y;
-      cohesionForce = this.normalize(cohesionForce);
-      cohesionForce.x *= FORCE_MULTIPLIER;
-      cohesionForce.y *= FORCE_MULTIPLIER;
-      this.velocity.x += cohesionForce.x;
-      this.velocity.y += cohesionForce.y;
-    }
-  }
-
-  updatePosition() {
-    this.position.x += this.velocity.x;
-    this.position.y += this.velocity.y;
-
-    // Wrap around the screen
-    this.position.x = (this.position.x + CANVAS_WIDTH) % CANVAS_WIDTH;
-    this.position.y = (this.position.y + CANVAS_HEIGHT) % CANVAS_HEIGHT;
-
-    // Limit the maximum speed
-    let speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
-    if (speed > MAX_SPEED) {
-      this.velocity.x = (this.velocity.x / speed) * MAX_SPEED;
-      this.velocity.y = (this.velocity.y / speed) * MAX_SPEED;
-    }
-  }
-
-  distance(other) {
-    if (
-        this === undefined ||
-        other === undefined ||
-        this.position === undefined ||
-        other.position === undefined
-      ) {
-        return 0;
-      }
-    let dx = this.position.x - other.position.x;
-    let dy = this.position.y - other.position.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  normalize(vector) {
-    let length = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-    if (length === 0) {
-      return { x: 0, y: 0 };
-    } else {
-      return { x: vector.x / length, y: vector.y / length };
-    }
-  }
 }
 
-// Main animation loop
-function animate() {
-  requestAnimationFrame(animate);
-
-  // Clear the canvas
-  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  // Update and draw the boids
-  for (let i = 0; i < boids.length; i++) {
-    boids[i].update(boids);
-    
-    // Draw the boid as a circle
-    // ctx.beginPath();
-    // ctx.arc(boids[i].position.x, boids[i].position.y, BOID_RADIUS, 0, 2 * Math.PI);
-    // ctx.fillStyle = "white";
-    // ctx.fill();
-    // ctx.beginPath
-    // ctx.moveTo(boids[i].position.x, boids[i].position.y);
-    // ctx.lineTo(boids[i].position.x + boids[i].velocity.x * 10, boids[i].position.y + boids[i].velocity.y * 10);
-    // ctx.strokeStyle = "red";
-    // ctx.stroke();
-
-
-    // Draw the boid as a triangle
-    ctx.save();
-    ctx.translate(boids[i].position.x, boids[i].position.y);
-    ctx.rotate(Math.atan2(boids[i].velocity.y, boids[i].velocity.x) + Math.PI / 2);
-    ctx.beginPath();
-    ctx.moveTo(0, -BOID_RADIUS * 2);
-    ctx.lineTo(-BOID_RADIUS, BOID_RADIUS * 2);
-    ctx.lineTo(BOID_RADIUS, BOID_RADIUS * 2);
-    ctx.fillStyle = "white";
-    ctx.fill();
-    ctx.restore();
-  }
-}
-
-// Set up the canvas and create the boids
-const canvas = document.getElementById("canvas");
-canvas.width = CANVAS_WIDTH;
-canvas.height = CANVAS_HEIGHT;
-const ctx = canvas.getContext("2d");
+// Create an array to hold boids
 const boids = [];
-for (let i = 0; i < NUM_BOIDS; i++) {
-  boids.push(new Boid());
+
+// Initialize boids
+for (let i = 0; i < numBoids; i++) {
+    // const x = Math.random() * canvas.width;
+    // const y = Math.random() * canvas.height;
+    const x = 0;
+    const y = 0;
+    const vx = Math.random() * 2 - 1;
+    const vy = Math.random() * 2 - 1;
+    const biasVal = (i < numBoids / 2) ? defaultBiasVal : -defaultBiasVal;
+    boids.push(new Boid(x, y, vx, vy, biasVal));
 }
 
-// Start the animation loop
+// Animation loop
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (const boid of boids) {
+        boid.update(boids);
+
+        // ctx.strokeStyle = 'red';
+        // // Draw boid in circle
+        // ctx.beginPath();
+        // ctx.moveTo(boid.x, boid.y);
+        // ctx.lineTo(boid.x + boid.vx * 2, boid.y + boid.vy * 2);
+        // ctx.stroke();
+        
+        // // Wrap around
+        // if (boid.x < 0) boid.x = canvas.width;
+        // if (boid.x > canvas.width) boid.x = 0;
+        // if (boid.y < 0) boid.y = canvas.height;
+        // if (boid.y > canvas.height) boid.y = 0;
+        
+        // // in red color
+        // ctx.strokeStyle = 'white';
+
+        // // Draw protected range
+        // ctx.beginPath();
+        // ctx.arc(boid.x, boid.y, protectedRange, 0, 2 * Math.PI);
+        // ctx.stroke();
+
+        // Draw boid as triangle
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.moveTo(boid.x + boid.vx * 2, boid.y + boid.vy * 2);
+        ctx.lineTo(boid.x + boid.vy * 2, boid.y - boid.vx * 2);
+        ctx.lineTo(boid.x - boid.vy * 2, boid.y + boid.vx * 2);
+        ctx.fill();
+
+        
+
+        // Draw previous positions
+        for (let i = 0; i < boid.prevPositions.length; i++) {
+            const pos = boid.prevPositions[i];
+            ctx.globalAlpha = i / boid.prevPositions.length;
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 2, 0, 2 * Math.PI);
+            ctx.fill();
+
+        }
+
+    }
+
+    requestAnimationFrame(animate);
+}
+
+
+
+
+const numBoidsElement = document.getElementById('numBoids');
+const visualRangeElement = document.getElementById('visualRange');
+const protectedRangeElement = document.getElementById('protectedRange');
+const centeringFactorElement = document.getElementById('centeringFactor');
+const avoidFactorElement = document.getElementById('avoidFactor');
+const matchingFactorElement = document.getElementById('matchingFactor');
+const maxSpeedElement = document.getElementById('maxSpeed');
+const minSpeedElement = document.getElementById('minSpeed');
+const turnFactorElement = document.getElementById('turnFactor');
+const biasIncrementElement = document.getElementById('biasIncrement');
+const defaultBiasValElement = document.getElementById('defaultBiasVal');
+const maxBiasElement = document.getElementById('maxBias');
+
+
+const changeButton = document.getElementById('change');
+const resetButton = document.getElementById('reset');
+
+// Change button event listener
+changeButton.addEventListener('click', () => {
+    // Update variables with new values from input fields
+    numBoids = parseInt(numBoidsElement.value);
+    visualRange = parseFloat(visualRangeElement.value);
+    protectedRange = parseFloat(protectedRangeElement.value);
+    centeringFactor = parseFloat(centeringFactorElement.value);
+    avoidFactor = parseFloat(avoidFactorElement.value);
+    matchingFactor = parseFloat(matchingFactorElement.value);
+    maxSpeed = parseFloat(maxSpeedElement.value);
+    minSpeed = parseFloat(minSpeedElement.value);
+    turnFactor = parseFloat(turnFactorElement.value);
+    biasIncrement = parseFloat(biasIncrementElement.value);
+    defaultBiasVal = parseFloat(defaultBiasValElement.value);
+    maxBias = parseFloat(maxBiasElement.value);
+
+    // Remove all existing boids
+    boids.length = 0;
+
+    // Reinitialize boids with new parameters
+    for (let i = 0; i < numBoids; i++) {
+        const x = 0;
+        const y = 0;
+        const vx = Math.random() * 2 - 1;
+        const vy = Math.random() * 2 - 1;
+        const biasVal = (i < numBoids / 2) ? defaultBiasVal : -defaultBiasVal;
+        boids.push(new Boid(x, y, vx, vy, biasVal));
+    }
+});
+
+// Reset button event listener
+resetButton.addEventListener('click', () => {
+    // Reset input field values to defaults
+    numBoidsElement.value = numBoids;
+    visualRangeElement.value = visualRange;
+    protectedRangeElement.value = protectedRange;
+    centeringFactorElement.value = centeringFactor;
+    avoidFactorElement.value = avoidFactor;
+    matchingFactorElement.value = matchingFactor;
+    maxSpeedElement.value = maxSpeed;
+    minSpeedElement.value = minSpeed;
+    turnFactorElement.value = turnFactor;
+    biasIncrementElement.value = biasIncrement;
+    defaultBiasValElement.value = defaultBiasVal;
+    maxBiasElement.value = maxBias;
+
+    // Clear existing boids
+    boids.length = 0;
+
+    // Reinitialize boids with default parameters
+    for (let i = 0; i < numBoids; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;        
+        const vx = Math.random() * 2 - 1;
+        const vy = Math.random() * 2 - 1;
+        const biasVal = (i < numBoids / 2) ? defaultBiasVal : -defaultBiasVal;
+        boids.push(new Boid(x, y, vx, vy, biasVal));
+    }
+});
+
+
+// on window resize, update canvas size
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvasWidth = window.innerWidth;
+    canvasHeight = window.innerHeight;
+});
+
+// on value change, show number in span
+const spans = document.querySelectorAll('span');
+const inputs = document.querySelectorAll('input');
+inputs.forEach((inp, index) => {
+    inp.addEventListener('change', () => {
+        spans[index].innerText = inp.value;
+    });
+});
+
+
+
+
+// Start animation
 animate();
-
-// input elements
-const boidCountElement = document.getElementById("boidCount");
-const speedElement = document.getElementById("speed");
-const separationElement = document.getElementById("separation_distance");
-const alignmentElement = document.getElementById("alignment_distance");
-const cohesionElement = document.getElementById("cohesion_distance");
-const forceElement = document.getElementById("force_multiplier");
-
-const resetButton = document.getElementById("reset");
-const changeButton = document.getElementById("change");
-// Event listeners
-resetButton.addEventListener("click", () => {
-    NUM_BOIDS = 100;
-    SEPARATION_DISTANCE = 100;
-    ALIGNMENT_DISTANCE = 100;
-    COHESION_DISTANCE = 100;
-    MAX_SPEED = 4;
-    FORCE_MULTIPLIER = 0.1;
-    boidCountElement.value = NUM_BOIDS;
-    separationElement.value = SEPARATION_DISTANCE;
-    alignmentElement.value = ALIGNMENT_DISTANCE;
-    cohesionElement.value = COHESION_DISTANCE;
-    speedElement.value = MAX_SPEED;
-    forceElement.value = FORCE_MULTIPLIER*10;
-
-    boids.length = 0;
-    for (let i = 0; i < NUM_BOIDS; i++) {
-        boids.push(new Boid());
-    }
-});
-
-changeButton.addEventListener("click", () => {
-    NUM_BOIDS = boidCountElement.value;
-    SEPARATION_DISTANCE = separationElement.value;
-    ALIGNMENT_DISTANCE = alignmentElement.value;
-    COHESION_DISTANCE = cohesionElement.value;
-    MAX_SPEED = speedElement.value;
-    FORCE_MULTIPLIER = forceElement.value/10;
-
-    boids.length = 0;
-    for (let i = 0; i < NUM_BOIDS; i++) {
-        boids.push(new Boid());
-    }
-});
-
